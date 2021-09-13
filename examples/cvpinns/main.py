@@ -93,7 +93,7 @@ class Grid:
                      + np.stack([np.zeros(len(xi0)),dx[1]/2*xi0],1),dtype=torch.float32)
         self.x1  = torch.tensor(np.expand_dims(np.transpose(np.meshgrid(x0c,x1,indexing='ij'),(1,2,0)),1) \
                      + np.expand_dims(np.stack([dx[0]/2*xi1,np.zeros(len(xi1))],1),1),dtype=torch.float32)
-        self.x01 = torch.tensor(np.expand_dims(x01c,[1,3]) + np.expand_dims(xi01*dx/2,1),dtype=torch.float32)
+        self.x01 = torch.tensor(np.expand_dims(np.expand_dims(x01c,1),4) + np.expand_dims(xi01*dx/2,1),dtype=torch.float32)
 
         self.xall = torch.cat([torch.reshape(self.x0,(-1,2)),torch.reshape(self.x1,(-1,2))],0)
         self.x0len = torch.prod(torch.tensor(self.x0.shape[0:-1]))
@@ -158,7 +158,7 @@ class SerialNet(nn.Module):
     step_layer = lambda: StepLayer(channels)
     
     self.open_nn = OpenLayer(channels)
-    self.parallel_nn = torchbraid.LayerParallel(MPI.COMM_WORLD,step_layer,local_steps,Tf,max_levels=1,max_iters=1)
+    self.parallel_nn = torchbraid.LayerParallel(MPI.COMM_WORLD,step_layer,local_steps,Tf,max_fwd_levels=1,max_bwd_levels=1,max_iters=1)
     self.parallel_nn.setPrintLevel(0)
     
     self.serial_nn   = self.parallel_nn.buildSequentialOnRoot()
@@ -178,7 +178,7 @@ class ParallelNet(nn.Module):
     step_layer = lambda: StepLayer(channels)
     
     self.open_nn = OpenLayer(channels)
-    self.parallel_nn = torchbraid.LayerParallel(MPI.COMM_WORLD,step_layer,local_steps,Tf,max_levels=max_levels,max_iters=max_iters)
+    self.parallel_nn = torchbraid.LayerParallel(MPI.COMM_WORLD,step_layer,local_steps,Tf,max_fwd_levels=max_levels,max_bwd_levels=max_levels,max_iters=max_iters)
     self.parallel_nn.setPrintLevel(print_level)
     self.parallel_nn.setCFactor(4)
     self.close_nn = CloseLayer(channels)
@@ -270,6 +270,7 @@ def main():
     procs = MPI.COMM_WORLD.Get_size()
     args = parser.parse_args()
 
+
     # some logic to default to Serial if on one processor,
     # can be overriden by the user to run layer-parallel
     if args.force_lp:
@@ -299,7 +300,7 @@ def main():
       root_print(rank,'Using Serial')
       model = SerialNet(channels=args.channels,local_steps=local_steps)
     
-    grid = Grid([[0,1],[0,1]],[64,64])
+    grid = Grid([[0,1],[0,1]],[args.batch_size,args.batch_size])
     pde = Advection(grid)
     forward_backward_perf(rank,model,pde)
 
@@ -316,13 +317,13 @@ def main():
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
 
-    epoch_times = []
-    test_times = []
-    for epoch in range(1, args.epochs + 1):
-        start_time = timer()
-        train(rank,args, model, optimizer, epoch,pde)
-        end_time = timer()
-        epoch_times += [end_time-start_time]
+    #epoch_times = []
+    #test_times = []
+    #for epoch in range(1, args.epochs + 1):
+    #    start_time = timer()
+    #    train(rank,args, model, optimizer, epoch,pde)
+    #    end_time = timer()
+    #    epoch_times += [end_time-start_time]
 
         #scheduler.step()
 
@@ -330,6 +331,6 @@ def main():
     #root_print(rank,'TIME PER TEST:  %.2e (1 std dev %.2e)' % (stats.mean(test_times), stats.stdev(test_times)))
 
     #print('shape should be',grid.x01.shape[0:-1]+(1,),'but is',model(grid.x01).shape)
+    forward_backward_perf(rank,model,pde)
 if __name__ == '__main__':
     main()
-

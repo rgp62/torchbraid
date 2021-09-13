@@ -384,3 +384,45 @@ class LayerParallel(nn.Module):
   # end getTimersString
 
 # end LayerParallel
+
+
+
+
+
+class LayerParallelReshape:
+    def __init__(self,*args,**kwargs):
+        self.args = args
+        self.kwargs = kwargs
+        self.sizes = {}
+        self.print_level = None
+        self.cfactor = None
+        self.buildSequentialOnRootFlag = None
+
+
+    def __call__(self,x):
+        try:
+            lp = self.sizes[x.shape]
+        except:
+            lp = LayerParallel(*self.args,**self.kwargs)
+            self.sizes[x.shape] = lp
+            if self.print_level:
+                self.sizes[x.shape].setPrintLevel(self.print_level,self.tb_print)
+            if self.cfactor:
+                self.sizes[x.shape].setCFactor(self.cfactor)
+            if self.buildSequentialOnRootFlag:
+                self.sizes[x.shape].buildSequentialOnRoot()
+        return lp(x)
+
+    def setPrintLevel(self,print_level,tb_print=False):
+        self.setPrintLevel = print_level
+        self.tb_print = tb_print
+
+    def setCFactor(self,cfactor):
+        self.cfactor = cfactor
+
+    def buildSequentialOnRoot(self):
+        self.buildSequentialOnRootFlag = True
+
+    def getTimersString(self):
+        return self.sizes[list(self.sizes.keys())[0]].getTimersString()
+

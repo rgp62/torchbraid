@@ -167,7 +167,7 @@ class ForwardODENetApp(BraidApp):
     return self.timer_manager.timer("ForWD::"+name)
 
   def getLayer(self,t,tf,level):
-    index = self.getLocalTimeStepIndex(t,tf,level)
+    index = int(self.getLocalTimeStepIndex(t,tf,level))
     if index < 0:
       #pre_str = "\n{}: WARNING: getLayer index negative at {}: {}\n".format(self.my_rank,t,index)
       #stack_str = utils.stack_string('{}: |- '.format(self.my_rank))
