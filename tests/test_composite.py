@@ -88,7 +88,7 @@ class ParallelNet(nn.Module):
     self.channels = channels
     step_layer = lambda: StepLayer(channels)
     
-    self.parallel_nn = torchbraid.LayerParallel(MPI.COMM_WORLD,step_layer,local_steps,Tf,max_levels=max_levels,max_iters=max_iters)
+    self.parallel_nn = torchbraid.LayerParallel(MPI.COMM_WORLD,step_layer,local_steps,Tf,max_fwd_levels=max_levels,max_bwd_levels=max_levels,max_iters=max_iters)
     self.parallel_nn.setPrintLevel(print_level)
     self.parallel_nn.setCFactor(4)
     self.o = self.parallel_nn.comp_op() # get tool to build up composition neural networks
@@ -242,8 +242,11 @@ class TestTorchBraid(unittest.TestCase):
       print('error in {} ?= {} (rel diff = {})'.format(p_loss,s_loss,(p_loss-s_loss)/s_loss))
 
       for s_grad,p_grad in zip(s_grads,p_grads):
+        val = torch.norm(s_grad-p_grad)
         # check the error conditions for the gradient of the parameters
-        self.assertTrue(torch.norm(s_grad-p_grad)<=1e-15)
+        print('error grad in {}'.format(val))
+        sys.stdout.flush()
+        self.assertTrue(val<=1e-15)
   # end test_linearNet_Exact
 
 if __name__ == '__main__':
