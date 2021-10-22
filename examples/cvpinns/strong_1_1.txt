@@ -1,0 +1,30 @@
+Using ParallelNet
+  Braid: Max. iterations reached.
+
+  Braid: Max. iterations reached.
+
+TIME FORWARD:  1.57e+03
+TIME BACKWARD: 8.88e+03
+
+   *** Proc = 0        ***
+        timer       ||      count       |      total       |       mean       |      stdev       |
+======================================================
+  BckWD::access     ||       513        |    2.9277e-03    |    5.7070e-06    |    3.6127e-05    |
+  BckWD::clone      ||       1866       |    3.1885e+00    |    1.7087e-03    |    9.4024e-04    |
+  BckWD::free       ||       1866       |    8.5150e-02    |    4.5632e-05    |    2.0043e-04    |
+  BckWD::init       ||       129        |    3.8740e-01    |    3.0031e-03    |    3.6848e-04    |
+  BckWD::norm       ||       256        |    4.1387e-01    |    1.6167e-03    |    2.5390e-04    |
+  BckWD::step       ||       2368       |    8.8689e+03    |    3.7453e+00    |    1.3122e-01    |
+  BckWD::sum        ||       2368       |    5.1905e+00    |    2.1919e-03    |    6.7411e-04    |
+  ForWD::access     ||       513        |    3.3130e-03    |    6.4580e-06    |    9.0379e-05    |
+  ForWD::clone      ||       3722       |    7.7510e+00    |    2.0825e-03    |    1.2138e-03    |
+  ForWD::free       ||       3338       |    3.5591e-01    |    1.0662e-04    |    1.7775e-03    |
+  ForWD::getUVector ||       2368       |    2.8476e-02    |    1.2025e-05    |    2.9260e-06    |
+  ForWD::init       ||       129        |    4.1095e-01    |    3.1856e-03    |    3.6968e-04    |
+  ForWD::norm       ||       256        |    4.0164e-01    |    1.5689e-03    |    2.6959e-05    |
+  ForWD::runBraid   ||        1         |    1.5662e+03    |    1.5662e+03    |    0.0000e+00    |
+  ForWD::step       ||       2240       |    1.5525e+03    |    6.9307e-01    |    4.2667e-02    |
+  ForWD::sum        ||       2368       |    4.7203e+00    |    1.9934e-03    |    6.9615e-04    |
+
+  Braid: Max. iterations reached.
+

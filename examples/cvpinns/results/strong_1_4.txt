@@ -1,0 +1,34 @@
+Using ParallelNet
+  Braid: Max. iterations reached.
+
+  Braid: Max. iterations reached.
+
+TIME FORWARD:  1.45e+01
+TIME BACKWARD: 2.58e+01
+
+   *** Proc = 0        ***
+        timer       ||      count       |      total       |       mean       |      stdev       |
+======================================================
+  BckWD::access     ||       513        |    1.6256e-03    |    3.1688e-06    |    1.4544e-05    |
+  BckWD::clone      ||       1866       |    7.5299e-01    |    4.0353e-04    |    2.3470e-04    |
+  BckWD::free       ||       1866       |    1.8651e-01    |    9.9950e-05    |    2.5415e-04    |
+  BckWD::init       ||       129        |    1.0659e-01    |    8.2625e-04    |    2.1413e-04    |
+  BckWD::norm       ||       256        |    1.4461e-01    |    5.6487e-04    |    1.7395e-05    |
+  BckWD::step       ||       2368       |    2.2646e+01    |    9.5633e-03    |    2.2730e-03    |
+  BckWD::sum        ||       2368       |    1.0666e+00    |    4.5042e-04    |    1.2123e-04    |
+  ForWD::access     ||       513        |    9.1878e-04    |    1.7910e-06    |    1.3900e-05    |
+  ForWD::clone      ||       3722       |    1.9663e+00    |    5.2830e-04    |    3.8816e-04    |
+  ForWD::free       ||       3338       |    1.2799e-01    |    3.8344e-05    |    6.6047e-04    |
+  ForWD::getUVector ||       2368       |    1.6733e-02    |    7.0664e-06    |    2.0325e-06    |
+  ForWD::init       ||       129        |    1.4385e-01    |    1.1151e-03    |    2.3598e-04    |
+  ForWD::norm       ||       256        |    1.3822e-01    |    5.3993e-04    |    1.1482e-05    |
+  ForWD::runBraid   ||        1         |    1.4515e+01    |    1.4515e+01    |    0.0000e+00    |
+  ForWD::step       ||       2240       |    1.1054e+01    |    4.9347e-03    |    1.2402e-03    |
+  ForWD::sum        ||       2368       |    1.0187e+00    |    4.3019e-04    |    1.1286e-04    |
+
+  Braid: Max. iterations reached.
+
+  Braid: Max. iterations reached.
+
+TIME FORWARD:  1.26e+01
+TIME BACKWARD: 2.25e+01

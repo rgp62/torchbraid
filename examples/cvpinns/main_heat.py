@@ -51,9 +51,6 @@ import scipy.special
 import numpy as np
 import matplotlib.pylab as plt
 
-import imp
-imp.reload(torchbraid)
-
 def root_print(rank,s):
   if rank==0:
     print(s)
@@ -103,27 +100,32 @@ class Grid:
         self.x1len = torch.prod(torch.tensor(self.x1.shape[0:-1]))
         
 
-class Advection:
+class Heat:
     def __init__(self,grid):
         self.grid = grid
-        self.F1BC = torch.zeros(self.grid.x1[:,:,0:1,...,0].shape + (1,),dtype=torch.float32)
+        self.F1BC_L = torch.zeros(self.grid.x1[:,:,0:1,...,0].shape + (1,),dtype=torch.float32)
+        self.F1BC_R = torch.zeros(self.grid.x1[:,:,0:1,...,0].shape + (1,),dtype=torch.float32)
         x = self.grid.x0[0:1,...,1::].numpy()
         self.F0BC = torch.tensor(np.piecewise(x, [x < .4,(x>=.4) & (x<.5), (x>=.5) & (x<.6), x >= .6], [0., lambda x:10*(x-.4), lambda x: -10*(x-.6),0]),dtype=torch.float32)
 
     def loss(self,u):
 
-        ux = u(self.grid.xall)
+        ux_Jux = u(self.grid.xall)
+        pivot = ux_Jux.shape[0]//3
+        ux = ux_Jux[0:pivot]
+        Jux = torch.reshape(ux_Jux[pivot::],(ux.shape[0],1,2))
+        dudx = Jux[:,:,1]
         ux0 = torch.reshape(ux[0:self.grid.x0len],(self.grid.x0.shape[0:-1]+(1,)))
-        ux1 = torch.reshape(ux[self.grid.x0len::],(self.grid.x1.shape[0:-1]+(1,)))
+        ux1 = torch.reshape(dudx[self.grid.x0len::],(self.grid.x1.shape[0:-1]+(1,)))
         F0ux = torch.cat([self.F0BC,ux0[1::]],axis=0)
-        F1ux = torch.cat([self.F1BC,ux1[:,:,1::]],axis=2)
+        F1ux = torch.cat([self.F1BC_L,ux1[:,:,1:-1],self.F1BC_R],axis=2)
         
         F0int  = self.grid.dx[1]/2*torch.einsum('abix,i->abx',F0ux,self.grid.wi0)
         F1int  = self.grid.dx[0]/2*torch.einsum('aibx,i->abx',F1ux,self.grid.wi1)
         
         return torch.sum((
                 (F0int[1::] - F0int[0:-1])  \
-               +(F1int[:,1::] - F1int[:,0:-1])
+               -(F1int[:,1::] - F1int[:,0:-1])
                )**2)
 
 
@@ -131,27 +133,44 @@ class OpenLayer(nn.Module):
   def __init__(self,channels):
     super(OpenLayer, self).__init__()
     self.layer = nn.Linear(2,channels,dtype=torch.float32)
+    self.channels = channels
 
   def forward(self, x):
-    return F.relu(self.layer(x))
+    Ax = self.layer(x)
+    hAx = torch.tanh(Ax)
+    hpAx = 1-hAx**2
+    return torch.cat([hAx,torch.reshape(torch.unsqueeze(hpAx,-1)*self.layer.weight,(-1,self.channels))],0)
 # end layer
 
 class CloseLayer(nn.Module):
   def __init__(self,channels):
     super(CloseLayer, self).__init__()
     self.layer = nn.Linear(channels,1,dtype=torch.float32)
+    self.channels = channels
 
-  def forward(self, x):
-    return self.layer(x)
+  def forward(self, x_Jx):
+    pivot = x_Jx.shape[0]//3
+    x = x_Jx[0:pivot]
+    Ax = self.layer(x)
+    Jx = torch.reshape(x_Jx[pivot::],(x.shape[0],self.channels,2))
+    AJx = torch.reshape(torch.sum((torch.unsqueeze(Jx,1)*torch.unsqueeze(torch.unsqueeze(self.layer.weight,0),-1)),2),(-1,1))
+    return torch.cat([Ax,AJx],0)
 # end layer
 
 class StepLayer(nn.Module):
   def __init__(self,channels):
     super(StepLayer, self).__init__()
     self.layer = nn.Linear(channels,channels,dtype=torch.float32)
+    self.channels = channels
 
-  def forward(self, x):
-    return F.relu(self.layer(x))
+  def forward(self, x_Jx):
+    pivot = x_Jx.shape[0]//3
+    x = x_Jx[0:pivot]
+    hAx = torch.tanh(self.layer(x))
+    hpAx = 1-hAx**2
+    Jx = torch.reshape(x_Jx[pivot::],(x.shape[0],self.channels,2))
+    hpAJx = torch.reshape(torch.unsqueeze(hpAx,-1)*torch.sum((torch.unsqueeze(Jx,1)*torch.unsqueeze(torch.unsqueeze(self.layer.weight,0),-1)),2),(-1,self.channels))
+    return torch.cat([hAx,hpAJx],0)
 # end layer
 
 class SerialNet(nn.Module):
@@ -161,11 +180,13 @@ class SerialNet(nn.Module):
     step_layer = lambda: StepLayer(channels)
     
     self.open_nn = OpenLayer(channels)
-    self.parallel_nn = torchbraid.LayerParallelReshape(MPI.COMM_WORLD,step_layer,local_steps,Tf,max_fwd_levels=1,max_bwd_levels=1,max_iters=1)
+    self.parallel_nn = torchbraid.LayerParallel(MPI.COMM_WORLD,step_layer,local_steps,Tf,max_fwd_levels=1,max_bwd_levels=1,max_iters=1)
     self.parallel_nn.setPrintLevel(0)
     
     self.serial_nn   = self.parallel_nn.buildSequentialOnRoot()
     self.close_nn = CloseLayer(channels)
+
+    self.channels=channels
  
   def forward(self, x):
     x = self.open_nn(x)
@@ -181,10 +202,12 @@ class ParallelNet(nn.Module):
     step_layer = lambda: StepLayer(channels)
     
     self.open_nn = OpenLayer(channels)
-    self.parallel_nn = torchbraid.LayerParallelReshape(MPI.COMM_WORLD,step_layer,local_steps,Tf,max_fwd_levels=max_levels,max_bwd_levels=max_levels,max_iters=max_iters)
+    self.parallel_nn = torchbraid.LayerParallel(MPI.COMM_WORLD,step_layer,local_steps,Tf,max_fwd_levels=max_levels,max_bwd_levels=max_levels,max_iters=max_iters)
     self.parallel_nn.setPrintLevel(print_level)
     self.parallel_nn.setCFactor(4)
     self.close_nn = CloseLayer(channels)
+
+    self.channels=channels
  
   def forward(self, x):
     x = self.open_nn(x)
@@ -273,6 +296,7 @@ def main():
     procs = MPI.COMM_WORLD.Get_size()
     args = parser.parse_args()
 
+
     # some logic to default to Serial if on one processor,
     # can be overriden by the user to run layer-parallel
     if args.force_lp:
@@ -302,8 +326,8 @@ def main():
       root_print(rank,'Using Serial')
       model = SerialNet(channels=args.channels,local_steps=local_steps)
     
-    grid = Grid([[0,1],[0,1]],[64,64])
-    pde = Advection(grid)
+    grid = Grid([[0,1],[0,1]],[args.batch_size,args.batch_size])
+    pde = Heat(grid)
     forward_backward_perf(rank,model,pde)
 
     if force_lp:
@@ -319,13 +343,13 @@ def main():
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
 
-    epoch_times = []
-    test_times = []
-    for epoch in range(1, args.epochs + 1):
-        start_time = timer()
-        train(rank,args, model, optimizer, epoch,pde)
-        end_time = timer()
-        epoch_times += [end_time-start_time]
+    #epoch_times = []
+    #test_times = []
+    #for epoch in range(1, args.epochs + 1):
+    #    start_time = timer()
+    #    train(rank,args, model, optimizer, epoch,pde)
+    #    end_time = timer()
+    #    epoch_times += [end_time-start_time]
 
         #scheduler.step()
 
@@ -333,7 +357,6 @@ def main():
     #root_print(rank,'TIME PER TEST:  %.2e (1 std dev %.2e)' % (stats.mean(test_times), stats.stdev(test_times)))
 
     #print('shape should be',grid.x01.shape[0:-1]+(1,),'but is',model(grid.x01).shape)
-
     forward_backward_perf(rank,model,pde)
 if __name__ == '__main__':
     main()
